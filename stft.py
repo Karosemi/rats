@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 import pandas as pd
-from file_reader import open_file
+from file_reader import open_file, open_csv_file
 
-def plot_fft(time, signal, freq_limit=60000,save=None, show=False):
-    freqs, fft = get_fft(time, signal)
+def plot_fft(time, signal, fp=None, freq_limit=60000,save=None):
+    freqs, fft = get_fft(time, signal, fp)
     half_freqs, half_fft = freqs[:freqs.size//2], fft[:fft.size//2]
     m_fft = np.abs(half_fft)
     quant = np.quantile(m_fft, 0.90)
@@ -22,11 +22,13 @@ def plot_fft(time, signal, freq_limit=60000,save=None, show=False):
         plt.xlim((0,half_freqs[freqs_limit_index]))
     if save is not None:
         plt.savefig(save)
-    elif show:
+
+    else:
         plt.show()
+    plt.close()
 
 
-def plot_stft(time, signal, save=None, upper_limit=65000, in_queue=False):
+def plot_stft(time, signal, fp=None, save=None, upper_limit=65000, time_signal=False):
     """
 
     :param f: frequency range
@@ -35,17 +37,18 @@ def plot_stft(time, signal, save=None, upper_limit=65000, in_queue=False):
     :param save: save file name, if None then plot printed, but is not saved
     :param upper_limit: upper frequency limit of plot
     """
-    f, t, Sxx = get_stft(time, signal)
+    f, t, Sxx = get_stft(time, signal, fp)
     if f is None:
         return None
-    plt.figure(figsize=(12, 6))
-    # plt.subplot(211)
-    # plot_fft(time, signal)
-    # plt.title('Time signal')
-    # plt.xlabel('Time [sec]')
-    # plt.ylabel('Amplitude')
-    # plt.subplot(212)
-    plt.pcolormesh(t, f, np.abs(Sxx))
+    plt.figure(figsize=(12, 12))
+    if time_signal:
+        plt.subplot(211)
+        plt.plot(time, signal)
+        plt.title('Time signal')
+        plt.xlabel('Time [sec]')
+        plt.ylabel('Amplitude')
+        plt.subplot(212)
+    plt.pcolormesh(t+np.min(time), f, np.abs(Sxx), vmax=0.5)
     plt.title('Spektrogram transformaty Gabora')
     plt.ylabel('Częstotliwość [Hz]')
     plt.xlabel('Czas [s]')
@@ -53,35 +56,33 @@ def plot_stft(time, signal, save=None, upper_limit=65000, in_queue=False):
         plt.ylim((0, upper_limit))
     if save is not None:
         plt.savefig(save)
-    elif not in_queue:
+    else:
         plt.show()
-        plt.close()
+    plt.close()
 
 
-def get_fft(time, signal):
-    fp = find_fp(time)
+def get_fft(time, signal, fp):
+    if fp is None:
+        fp = find_fp(time)
     fft = np.fft.fft(signal)
     freqs = np.fft.fftfreq(signal.size, 1 / fp)
     return freqs, fft
 
 
-def get_stft(time, signal, nperseg=2028*2, std = 10000):
+def get_stft(time, signal, fp = None, nperseg=4096//2, std = 100):
     """
     :param time: time array
     :param signal: measuerement array
     :param nperseg: window weight
     :return:
     """
-    fp = find_fp(time)
-    # fs = get_sampling_rate(time.size, np.abs(np.max(time)-np.min(time)))
+    if fp is None:
+        fp = find_fp(time)
     wind = sig.get_window(('gaussian', std), nperseg)
-    # wind_1 = np.concatenate([wind, wind, wind, wind], axis=0)
     try:
-        f, t, Sxx = sig.stft(signal, fs=fp, window=wind, nperseg=nperseg, return_onesided=True)
+        f, t, Sxx = sig.stft(signal, fs=fp, window=wind, nperseg=nperseg, return_onesided=True, noverlap=int(0.9*nperseg))
     except ValueError:
         return None, None, None
-    # quant = np.quantile(Sxx, 0.5)
-    # Sxx = np.where(np.abs(Sxx) < quant, 0, Sxx)
     return f, t, Sxx
 
 def _get_real_time(time):
@@ -110,7 +111,6 @@ def find_fp(time):
 
     duration = end_oth_time - beg_oth_time
     cut_time = time[beg + i:end + j]
-    # duration = np.max(time) - np.min(time)
     fp = get_sampling_rate(cut_time.size, duration)
     return fp
 
@@ -122,9 +122,9 @@ def get_sampling_rate(N, duration):
     """
     return N/duration
 
-if __name__ == '__main__':
-    file = 'all_records/NewFile10.csv'
-    time, signal = open_file(file)
+# if __name__ == '__main__':
+#     file = 'all_records/NewFile10.csv'
+#     time, signal = open_file(file)
     # fft = np.fft.fft(signal)
     # quant = np.quantile(np.abs((fft)), 0.9)
     # fft = np.where(np.abs(fft)<quant, 0, fft)
